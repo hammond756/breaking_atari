@@ -102,5 +102,6 @@ venv.bak/
 
 # mypy
 .mypy_cache/
-**.*.png
+*.png
 .DS_STORE
+.idea
