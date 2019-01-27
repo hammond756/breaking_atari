@@ -38,7 +38,7 @@ class DQN(nn.Module):
         self.to(device)
 
     def prepare_input(self, x):
-        return transform_observation(x, (self.h, self.w))
+        return transform_observation(x, (self.h, self.w)).to(self.device)
 
     # Called with either one element to determine next action, or a batch
     # during optimization. Returns tensor([[left0exp,right0exp]...]).
