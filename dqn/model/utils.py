@@ -21,10 +21,9 @@ def transform_observation(obs, size):
         torchvision.transforms.Normalize([0], [1])
     ])(obs)
 
-def select_action(model, state, steps_done, action_dims, config):
+def select_action(model, state, action_dims, epsilon):
     sample = random.random()
-    eps_threshold = get_epsilon(steps_done, config.eps_start, config.eps_stop, config.eps_steps)
-    if sample > eps_threshold:
+    if sample > epsilon:
         with torch.no_grad():
             # t.max(1) will return largest value for column of each row.
             # second column on max result is index of where max element was

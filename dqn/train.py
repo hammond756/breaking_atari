@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import gym
 from itertools import count
 
-from model.utils import select_action, get_observation, transform_observation
+from model.utils import select_action, get_observation, transform_observation, get_epsilon
 from model.memory import Transition
 from model.dqn import HandcraftedDQN, DQN, extract_features
 from model.memory import ReplayMemory
@@ -55,16 +55,14 @@ def optimize_model(model, target, memory, optimizer, config):
 
 def train(config):
     env = gym.make(config.environment)
-
-    # get properties from environment
-    if config.image_dims:
-        height, width = config.image_dims
-
     action_dims = env.action_space.n
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-    # initialze models
+    # initialze model
+    if config.image_dims:
+        height, width = config.image_dims
+
     model = DQN(height, width, action_dims, device)
     target = DQN(height, width, action_dims, device)
     target.load_state_dict(model.state_dict())
@@ -88,16 +86,15 @@ def train(config):
         for t in count():
 
             # Select and perform an action
-            action = select_action(model, obs, steps_done, action_dims, config)
+            epsilon = get_epsilon(steps_done, config.eps_start, config.eps_stop, config.eps_steps)
+            action = select_action(model, obs, action_dims, epsilon)
             next_obs, reward, done = get_observation(env, action.item())
             next_obs = model.prepare_input(next_obs)
 
             total_reward += reward
+            steps_done += 1
 
             reward = torch.tensor([reward], device=model.device)
-
-            if t % 300 == 0:
-                print('{} seconds of game play'.format(t / 30))
 
             # Store the transition in memory
             replay_buffer.push(obs, action, next_obs, reward)
@@ -110,14 +107,48 @@ def train(config):
             if done:
                 rewards.append(total_reward)
                 break
+
         # Update the target network, copying all weights and biases in DQN
         if i_episode % config.target_update == 0:
             target.load_state_dict(model.state_dict())
 
-        print('reward for episode', total_reward)
+        if i_episode & config.eval_every == 0:
+            evaluate(model, config)
 
     print('Complete')
     print(rewards)
+
+def evaluate(model, config):
+    env = gym.make(config.environment)
+    action_dims = env.action_space.n
+    model.eval()
+
+    steps_done = 0
+    rewards = []
+
+    for i in config.num_eval:
+        obs, _, _ = get_observation(env)
+        obs = model.prepare_input(obs)
+
+        episode_reward = 0
+
+        for t in count():
+            # Select and perform an action
+            epsilon = 0
+            action = select_action(model, obs, action_dims, epsilon, config)
+            next_obs, reward, done = get_observation(env, action.item())
+
+            episode_reward += reward
+
+            # Move to the next state
+            obs = next_obs
+
+            if done:
+                rewards.append(episode_reward)
+                break
+
+    print('Mean reward: {}'.format(sum(rewards) / len(rewards)))
+
 
 if __name__ == '__main__':
     import argparse
@@ -132,6 +163,8 @@ if __name__ == '__main__':
     parser.add_argument('--environment', type=str, required=True)
     parser.add_argument('--target_update', type=int, required=False, default=10)
     parser.add_argument('--num_episodes', type=int, required=False, default=50)
+    parser.add_argument('--num_eval', type=int, required=False, default=5)
+    parser.add_argument('--eval_every', type=int, required=False, default=10)
     parser.add_argument('--lr', type=float, required=False, default=1e-4)
     parser.add_argument('--memory', type=int, required=False, default=100000)
 
