@@ -112,7 +112,7 @@ def train(config):
         if i_episode % config.target_update == 0:
             target.load_state_dict(model.state_dict())
 
-        if i_episode & config.eval_every == 0:
+        if i_episode % config.eval_every == 0:
             evaluate(model, config)
 
     print('Complete')
@@ -126,7 +126,7 @@ def evaluate(model, config):
     steps_done = 0
     rewards = []
 
-    for i in config.num_eval:
+    for i in range(config.num_eval):
         obs, _, _ = get_observation(env)
         obs = model.prepare_input(obs)
 
@@ -135,9 +135,9 @@ def evaluate(model, config):
         for t in count():
             # Select and perform an action
             epsilon = 0
-            action = select_action(model, obs, action_dims, epsilon, config)
+            action = select_action(model, obs, action_dims, epsilon)
             next_obs, reward, done = get_observation(env, action.item())
-
+            next_obs = model.prepare_input(next_obs)
             episode_reward += reward
 
             # Move to the next state
