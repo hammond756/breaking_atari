@@ -1,9 +1,11 @@
 __author__ = 'Aron'
 
 import torch.nn as nn
+import torch
 import torch.nn.functional as F
 import numpy as np
 from cv2 import matchTemplate, TM_CCORR_NORMED, COLOR_BGR2GRAY, cvtColor, imread, addWeighted
+from .utils import transform_observation
 
 class DQN(nn.Module):
 
@@ -30,7 +32,13 @@ class DQN(nn.Module):
             nn.Linear(200, action_dims)
         )
 
+        self.h, self.w = h, w
+
         self.device = device
+        self.to(device)
+
+    def prepare_input(self, x):
+        return transform_observation(x, (self.h, self.w))
 
     # Called with either one element to determine next action, or a batch
     # during optimization. Returns tensor([[left0exp,right0exp]...]).
@@ -64,28 +72,7 @@ def location_features(template, observation, grid, threshold=0.8):
 
     return flat
 
-def extract_features(observation, grid=np.array((5,5))):
-
-    def read_averaged_template(path_a, path_b):
-        a = imread(path_a, 0)
-        b = imread(path_b, 0)
-
-        avg = addWeighted(a,0.5,b,0.5,0)
-
-        return a
-
-    template_path = 'space_invader_sprites/enemy_{}_{}.png'
-
-    templates = {
-        'enemy_0' : read_averaged_template(template_path.format(0, 'a'), template_path.format(0, 'b')),
-        'enemy_1' : read_averaged_template(template_path.format(1, 'a'), template_path.format(1, 'b')),
-        'enemy_2' : read_averaged_template(template_path.format(2, 'a'), template_path.format(2, 'b')),
-        'enemy_3' : read_averaged_template(template_path.format(3, 'a'), template_path.format(3, 'b')),
-        'enemy_4' : read_averaged_template(template_path.format(4, 'a'), template_path.format(4, 'b')),
-        'enemy_5' : read_averaged_template(template_path.format(5, 'a'), template_path.format(5, 'b')),
-        'self' : imread('space_invader_sprites/my_sprite.png', 0),
-        'defense' : imread('space_invader_sprites/defense.png', 0),
-    }
+def extract_features(observation, templates, grid=np.array((5,5))):
 
     gray = cvtColor(observation, COLOR_BGR2GRAY)
 
@@ -104,7 +91,6 @@ def extract_features(observation, grid=np.array((5,5))):
 
     return locs
 
-
 class HandcraftedDQN(nn.Module):
 
     def __init__(self, num_input, num_actions, device='cpu'):
@@ -116,10 +102,39 @@ class HandcraftedDQN(nn.Module):
             nn.Linear(300, num_actions)
         )
 
+        def read_averaged_template(path_a, path_b):
+            a = imread(path_a, 0)
+            b = imread(path_b, 0)
+
+            avg = addWeighted(a,0.5,b,0.5,0)
+
+            return avg
+
+
+        template_path = 'dqn/space_invader_sprites/enemy_{}_{}.png'
+
+        self.templates = {
+            'enemy_0' : read_averaged_template(template_path.format(0, 'a'), template_path.format(0, 'b')),
+            'enemy_1' : read_averaged_template(template_path.format(1, 'a'), template_path.format(1, 'b')),
+            'enemy_2' : read_averaged_template(template_path.format(2, 'a'), template_path.format(2, 'b')),
+            'enemy_3' : read_averaged_template(template_path.format(3, 'a'), template_path.format(3, 'b')),
+            'enemy_4' : read_averaged_template(template_path.format(4, 'a'), template_path.format(4, 'b')),
+            'enemy_5' : read_averaged_template(template_path.format(5, 'a'), template_path.format(5, 'b')),
+            'self' : imread('dqn/space_invader_sprites/my_sprite.png', 0),
+            'defense' : imread('dqn/space_invader_sprites/defense.png', 0),
+        }
+
         self.device = device
+        self.to(device)
+
+    def prepare_input(self, x):
+        x = self._extract_features(x)
+        x = torch.tensor(x, dtype=torch.float)
+        x = x.to(self.device)
+        return x
 
     def _extract_features(self, observation, grid=np.array([5,5])):
-        return extract_features(observation, grid)
+        return extract_features(observation, self.templates, grid)
 
     def forward(self, x):
         return self.net(x)

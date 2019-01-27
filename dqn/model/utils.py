@@ -21,9 +21,9 @@ def transform_observation(obs, size):
         torchvision.transforms.Normalize([0], [1])
     ])(obs)
 
-def select_action(model, state, steps_done, action_dims):
+def select_action(model, state, steps_done, action_dims, config):
     sample = random.random()
-    eps_threshold = get_epsilon(steps_done)
+    eps_threshold = get_epsilon(steps_done, config.eps_start, config.eps_stop, config.eps_steps)
     if sample > eps_threshold:
         with torch.no_grad():
             # t.max(1) will return largest value for column of each row.
@@ -33,8 +33,8 @@ def select_action(model, state, steps_done, action_dims):
     else:
         return torch.tensor([[random.randrange(action_dims)]], device=model.device, dtype=torch.long)
 
-def get_epsilon(it):
-    it = min(it, 999)
-    epsilons = np.linspace(1, 0.05, 1000)
+def get_epsilon(it, start, stop, steps):
+    it = min(it, steps-1)
+    epsilons = np.linspace(start, stop, steps)
 
     return epsilons[it]

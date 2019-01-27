@@ -8,12 +8,11 @@ from model.utils import select_action, get_observation, transform_observation
 from model.memory import Transition
 from model.dqn import HandcraftedDQN, DQN, extract_features
 from model.memory import ReplayMemory
-from constants import BATCH_SIZE, GAMMA, TARGET_UPDATE, IMAGE_DIMS
 
-def optimize_model(model, target, memory, optimizer):
-    if len(memory) < BATCH_SIZE:
+def optimize_model(model, target, memory, optimizer, config):
+    if len(memory) < config.batch_size:
         return
-    transitions = memory.sample(BATCH_SIZE)
+    transitions = memory.sample(config.batch_size)
     # Transpose the batch (see https://stackoverflow.com/a/19343/3343043 for
     # detailed explanation). This converts batch-array of Transitions
     # to Transition of batch-arrays.
@@ -39,10 +38,10 @@ def optimize_model(model, target, memory, optimizer):
     # on the "older" target_net; selecting their best reward with max(1)[0].
     # This is merged based on the mask, such that we'll have either the expected
     # state value or 0 in case the state was final.
-    next_state_values = torch.zeros(BATCH_SIZE, device=model.device)
+    next_state_values = torch.zeros(config.batch_size, device=model.device)
     next_state_values[non_final_mask] = target(non_final_next_states).max(1)[0].detach()
     # Compute the expected Q values
-    expected_state_action_values = (next_state_values * GAMMA) + reward_batch
+    expected_state_action_values = (next_state_values * config.gamma) + reward_batch
 
     # Compute Huber loss
     loss = F.smooth_l1_loss(state_action_values, expected_state_action_values.unsqueeze(1))
@@ -51,54 +50,47 @@ def optimize_model(model, target, memory, optimizer):
     optimizer.zero_grad()
     loss.backward()
     for param in model.parameters():
-        # param.grad.data.clamp_(-1, 1)
-        pass
+        param.grad.data.clamp_(-1, 1)
     optimizer.step()
 
-env = gym.make('SpaceInvaders-v0')
-# get properties from environment
-height, width = IMAGE_DIMS
-action_dims = env.action_space.n
+def train(config):
+    env = gym.make(config.environment)
 
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    # get properties from environment
+    if config.image_dims:
+        height, width = config.image_dims
 
-# initialze models
-model = HandcraftedDQN(9408, action_dims).to(device)
-target = HandcraftedDQN(9408, action_dims).to(device)
-target.load_state_dict(model.state_dict())
-target.eval()
+    action_dims = env.action_space.n
 
-optimizer = torch.optim.Adam(model.parameters(),lr=1e-4)
-replay_buffer = ReplayMemory(100000)
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-steps_done = 0
+    # initialze models
+    model = DQN(height, width, action_dims, device)
+    target = DQN(height, width, action_dims, device)
+    target.load_state_dict(model.state_dict())
+    target.eval()
 
-num_episodes = 50
-rewards = []
+    optimizer = torch.optim.Adam(model.parameters(),lr=config.lr)
+    replay_buffer = ReplayMemory(config.memory)
 
-def train():
-    for i_episode in range(num_episodes):
-        print("starting {} / {}".format(i_episode, num_episodes))
+    steps_done = 0
+
+    rewards = []
+
+    for i_episode in range(config.num_episodes):
+        print("starting {} / {}".format(i_episode, config.num_episodes))
         # Initialize the environment and state
         obs, _, _ = get_observation(env)
-
-        import png
-        png.from_array(obs, mode='RGB').save('initial.png')
-
-        obs = extract_features(obs)
-        obs = torch.tensor(obs, dtype=torch.float)
-        obs = obs.to(model.device)
+        obs = model.prepare_input(obs)
 
         total_reward = 0
 
         for t in count():
 
             # Select and perform an action
-            action = select_action(model, obs, steps_done, action_dims)
+            action = select_action(model, obs, steps_done, action_dims, config)
             next_obs, reward, done = get_observation(env, action.item())
-            next_obs = extract_features(next_obs)
-            next_obs = torch.tensor(next_obs, dtype=torch.float)
-            next_obs = next_obs.to(device)
+            next_obs = model.prepare_input(next_obs)
 
             total_reward += reward
 
@@ -114,12 +106,12 @@ def train():
             obs = next_obs
 
             # Perform one step of the optimization (on the target network)
-            optimize_model(model, target, replay_buffer, optimizer)
+            optimize_model(model, target, replay_buffer, optimizer, config)
             if done:
                 rewards.append(total_reward)
                 break
         # Update the target network, copying all weights and biases in DQN
-        if i_episode % TARGET_UPDATE == 0:
+        if i_episode % config.target_update == 0:
             target.load_state_dict(model.state_dict())
 
         print('reward for episode', total_reward)
@@ -128,4 +120,20 @@ def train():
     print(rewards)
 
 if __name__ == '__main__':
-    train()
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--batch_size', type=str, required=False, default=128)
+    parser.add_argument('-gamma', type=float, required=False, default=0.999)
+    parser.add_argument('--eps_start', type=float, required=False, default=1.0)
+    parser.add_argument('--eps_stop', type=float, required=False, default=0.05)
+    parser.add_argument('--eps_steps', type=int, required=False, default=200)
+    parser.add_argument('--image_dims', type=int, nargs=2, required=True)
+    parser.add_argument('--environment', type=str, required=True)
+    parser.add_argument('--target_update', type=int, required=False, default=10)
+    parser.add_argument('--num_episodes', type=int, required=False, default=50)
+    parser.add_argument('--lr', type=float, required=False, default=1e-4)
+    parser.add_argument('--memory', type=int, required=False, default=100000)
+
+    config = parser.parse_args()
+    train(config)
