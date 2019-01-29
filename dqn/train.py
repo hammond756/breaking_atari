@@ -2,16 +2,17 @@ import torch
 import torch.nn.functional as F
 
 import gym
-from itertools import count
+from collections import deque
+import pprint
 
-from model.utils import select_action, get_observation, transform_observation, get_epsilon
+
+from model.utils import select_action, get_observation, transform_observation, get_epsilon, random_action, generate_validation_states
 from model.memory import Transition
 from model.dqn import HandcraftedDQN, DQN, extract_features
 from model.memory import ReplayMemory
 
 def optimize_model(model, target, memory, optimizer, config):
-    if len(memory) < config.batch_size:
-        return
+
     transitions = memory.sample(config.batch_size)
     # Transpose the batch (see https://stackoverflow.com/a/19343/3343043 for
     # detailed explanation). This converts batch-array of Transitions
@@ -56,14 +57,18 @@ def optimize_model(model, target, memory, optimizer, config):
 def train(config):
     env = gym.make(config.environment)
     action_dims = env.action_space.n
+    depth = config.frame_stack
+
+    print('------')
+    print('Starting {}'.format(config.environment))
+    pprint.pprint(config)
+    print('------')
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-    # initialze model
-    if config.image_dims:
-        height, width = config.image_dims
-
+    height, width = config.image_size
     model = DQN(height, width, action_dims, device)
+
     target = DQN(height, width, action_dims, device)
     target.load_state_dict(model.state_dict())
     target.eval()
@@ -71,102 +76,161 @@ def train(config):
     optimizer = torch.optim.Adam(model.parameters(),lr=config.lr)
     replay_buffer = ReplayMemory(config.memory)
 
-    steps_done = 0
+    frames = 0
+    episodes = 0
 
     rewards = []
 
-    for i_episode in range(config.num_episodes):
-        print("starting {} / {}".format(i_episode, config.num_episodes))
+    stats = {
+        'epoch' : [],
+        'avg_reward' : [],
+        'avg_q' : [],
+        'max_reward' : [],
+        'episodes' : []
+    }
+
+    val_states = generate_validation_states(env, model, depth, 32)
+
+    while True:
         # Initialize the environment and state
         obs, _, _ = get_observation(env)
         obs = model.prepare_input(obs)
+        history = deque(iterable=depth*[obs], maxlen=depth)
+
+        state = torch.cat(list(history), dim=0)
 
         total_reward = 0
 
-        for t in count():
+        while True:
+
+            if frames % 100 == 0:
+                print("{} / {} frames done".format(frames, config.num_frames))
 
             # Select and perform an action
-            epsilon = get_epsilon(steps_done, config.eps_start, config.eps_stop, config.eps_steps)
-            action = select_action(model, obs, action_dims, epsilon)
+            epsilon = get_epsilon(frames, config.eps_start, config.eps_stop, config.eps_steps)
+
+            # first acquire enough experience for samples to be decorrelated
+            if frames > config.exploration_phase:
+                action = select_action(model, state, action_dims, epsilon)
+            else:
+                action = random_action(action_dims, model.device)
+
             next_obs, reward, done = get_observation(env, action.item())
             next_obs = model.prepare_input(next_obs)
+            history.append(next_obs)
+            next_state = torch.cat(list(history), dim=0)
+
+            frames += 1
 
             total_reward += reward
-            steps_done += 1
-
             reward = torch.tensor([reward], device=model.device)
 
             # Store the transition in memory
-            replay_buffer.push(obs, action, next_obs, reward)
+            replay_buffer.push(state, action, next_state, reward)
 
             # Move to the next state
-            obs = next_obs
+            state = next_state
 
-            # Perform one step of the optimization (on the target network)
-            optimize_model(model, target, replay_buffer, optimizer, config)
+            if frames % 4 == 0 and len(replay_buffer) > config.exploration_phase:
+                # Perform one step of the optimization (on the target network)
+                model.train()
+                optimize_model(model, target, replay_buffer, optimizer, config)
+
+            # Update the target network, copying all weights and biases in DQN
+            if frames % config.target_update == 0:
+                target.load_state_dict(model.state_dict())
+
+            if frames % config.eval_every == 0:
+                model.eval()
+                avg_reward = evaluate_reward(model, env, config)
+                avg_q = evaluate_q_func(model, val_states)
+
+                print('Average reward: \t\t{}'.format(avg_reward))
+                print('Average q-val: \t\t{}'.format(avg_q))
+
+                stats['epoch'].append(len(stats['epoch']))
+                stats['avg_reward'].append(avg_reward)
+                stats['avg_q'].append(avg_q)
+                stats['episodes'].append(episodes)
+
             if done:
                 rewards.append(total_reward)
+                episodes += 1
                 break
 
-        # Update the target network, copying all weights and biases in DQN
-        if i_episode % config.target_update == 0:
-            target.load_state_dict(model.state_dict())
-
-        if i_episode % config.eval_every == 0:
-            evaluate(model, config)
+        if frames > config.num_frames:
+            break
 
     print('Complete')
     print(rewards)
 
-def evaluate(model, config):
-    env = gym.make(config.environment)
+def evaluate_q_func(model, val_states):
+    predictions = model(val_states)
+    max_q, argmax_q = torch.max(predictions, dim=1)
+
+    return max_q.mean().item()
+
+def evaluate_reward(model, env, config):
     action_dims = env.action_space.n
     model.eval()
 
-    steps_done = 0
     rewards = []
+    frames = 0
 
-    for i in range(config.num_eval):
+    while True:
         obs, _, _ = get_observation(env)
         obs = model.prepare_input(obs)
+        history = deque(iterable=config.frame_stack*[obs], maxlen=config.frame_stack)
+        state = torch.cat(list(history), dim=0)
 
         episode_reward = 0
 
-        for t in count():
+        while True:
             # Select and perform an action
-            epsilon = 0
-            action = select_action(model, obs, action_dims, epsilon)
+            epsilon = 0.05
+            action = select_action(model, state, action_dims, epsilon)
             next_obs, reward, done = get_observation(env, action.item())
             next_obs = model.prepare_input(next_obs)
+            history.append(next_obs)
+            next_state = torch.cat(list(history), dim=0)
             episode_reward += reward
 
             # Move to the next state
-            obs = next_obs
+            state = next_state
+
+            frames += 1
 
             if done:
                 rewards.append(episode_reward)
                 break
 
-    print('Mean reward: {}'.format(sum(rewards) / len(rewards)))
+        if frames > config.num_eval:
+            break
+
+    return sum(rewards) / len(rewards)
 
 
 if __name__ == '__main__':
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--batch_size', type=str, required=False, default=128)
-    parser.add_argument('-gamma', type=float, required=False, default=0.999)
+
+    # defaults come from Mnih et al. (2015)
+    parser.add_argument('--batch_size', type=str, required=False, default=32)
+    parser.add_argument('-gamma', type=float, required=False, default=0.99)
     parser.add_argument('--eps_start', type=float, required=False, default=1.0)
-    parser.add_argument('--eps_stop', type=float, required=False, default=0.05)
-    parser.add_argument('--eps_steps', type=int, required=False, default=200)
-    parser.add_argument('--image_dims', type=int, nargs=2, required=True)
+    parser.add_argument('--eps_stop', type=float, required=False, default=0.1)
+    parser.add_argument('--eps_steps', type=int, required=False, default=1000000)
+    parser.add_argument('--image_size', type=int, nargs=2, required=False, default=[110, 84])
     parser.add_argument('--environment', type=str, required=True)
-    parser.add_argument('--target_update', type=int, required=False, default=10)
-    parser.add_argument('--num_episodes', type=int, required=False, default=50)
-    parser.add_argument('--num_eval', type=int, required=False, default=5)
-    parser.add_argument('--eval_every', type=int, required=False, default=10)
-    parser.add_argument('--lr', type=float, required=False, default=1e-4)
-    parser.add_argument('--memory', type=int, required=False, default=100000)
+    parser.add_argument('--target_update', type=int, required=False, default=10000)
+    parser.add_argument('--num_frames', type=int, required=False, default=10000000)
+    parser.add_argument('--num_eval', type=int, required=False, default=10000)
+    parser.add_argument('--eval_every', type=int, required=False, default=100000)
+    parser.add_argument('--lr', type=float, required=False, default=0.00025)
+    parser.add_argument('--memory', type=int, required=False, default=1000000)
+    parser.add_argument('--exploration_phase', type=int, required=False, default=50000)
+    parser.add_argument('--frame_stack', type=int, required=False, default=4)
 
     config = parser.parse_args()
     train(config)

@@ -23,20 +23,22 @@ class TestActionSelection(unittest.TestCase):
 
     @patch('random.random', lambda: 0.9)
     def test_inactive_epsilon(self):
-        action = select_action(self.model, self.state, self.steps_done, self.action_dims)
+        epsilon = 0.1
+        action = select_action(self.model, self.state, self.action_dims, epsilon)
         action_value = action.item()
         self.assertEqual(action_value, 4)
 
     @patch('random.random', lambda: 0.01)
     @patch('random.randrange', lambda x: 1)
     def test_active_epsilon(self):
-        action = select_action(self.model, self.state, self.steps_done, self.action_dims)
+        epsilon = 0.1
+        action = select_action(self.model, self.state, self.action_dims, epsilon)
         action_value = action.item()
         self.assertEqual(action_value, 1)
 
     def test_get_epsilon_linear_decay(self):
         iteration = 100
-        eps = get_epsilon(iteration)
+        eps = get_epsilon(iteration, 1.0, 0.05, 1000)
 
         # this is exactly what assertAlmostEqual is supposted to do
         # but that fails.
@@ -44,7 +46,7 @@ class TestActionSelection(unittest.TestCase):
 
     def test_get_epsilon_plateau(self):
         iteration = 1500
-        eps = get_epsilon(iteration)
+        eps = get_epsilon(iteration, 1.0, 0.05, 1000)
 
         self.assertEqual(eps, 0.05)
 
