@@ -160,8 +160,10 @@ def train(config):
             if done:
                 rewards.append(total_reward)
                 episodes += 1
-
-
+                break
+        
+        if frames > config.num_frames:
+            break
     statistics = pd.DataFrame(stats)
     statistics.to_csv(os.path.join(config.output_dir, 'stats.csv'), index_label='idx')
 
