@@ -2,8 +2,10 @@ import torch
 import torch.nn.functional as F
 
 import gym
+import os
 from collections import deque
 import pprint
+import pandas as pd
 
 
 from model.utils import select_action, get_observation, transform_observation, get_epsilon, random_action, generate_validation_states
@@ -58,13 +60,15 @@ def train(config):
     env = gym.make(config.environment)
     action_dims = env.action_space.n
     depth = config.frame_stack
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     print('------')
-    print('Starting {}'.format(config.environment))
+    print('Starting {}'.format(config.environment), 'on', device)
     pprint.pprint(config)
     print('------')
 
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    if not os.path.isdir(config.output_dir):
+        os.mkdir(config.output_dir)
 
     height, width = config.image_size
     model = DQN(height, width, action_dims, device)
@@ -161,8 +165,10 @@ def train(config):
         if frames > config.num_frames:
             break
 
-    print('Complete')
-    print(rewards)
+    statistics = pd.DataFrame(stats)
+    statistics.to_csv(os.path.join(config.output_dir, 'stats.csv'), index_label='idx')
+
+
 
 def evaluate_q_func(model, val_states):
     predictions = model(val_states)
@@ -231,6 +237,7 @@ if __name__ == '__main__':
     parser.add_argument('--memory', type=int, required=False, default=1000000)
     parser.add_argument('--exploration_phase', type=int, required=False, default=50000)
     parser.add_argument('--frame_stack', type=int, required=False, default=4)
+    parser.add_argument('--output_dir', type=str, required=True)
 
     config = parser.parse_args()
     train(config)
