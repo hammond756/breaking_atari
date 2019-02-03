@@ -156,7 +156,9 @@ def train(config):
                 stats['avg_reward'].append(avg_reward)
                 stats['avg_q'].append(avg_q)
                 stats['episodes'].append(episodes)
-
+                
+                model_path = config.output_dir + '/dqn-{}'.format(len(stats['epoch']))
+                torch.save(model.state_dict(), model_path)
             if done:
                 rewards.append(total_reward)
                 episodes += 1
