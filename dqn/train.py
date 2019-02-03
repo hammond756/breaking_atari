@@ -140,7 +140,7 @@ def train(config):
                 model.eval()
 
                 with torch.no_grad():
-                    avg_reward = evaluate_reward(model, env, config)
+                    avg_reward, max_reward = evaluate_reward(model, env, config)
                     avg_q = evaluate_q_func(model, val_states)
 
                 print('Average reward: \t\t{}'.format(avg_reward))
@@ -149,6 +149,7 @@ def train(config):
                 # update statistics
                 stats['epoch'].append(len(stats['epoch']))
                 stats['avg_reward'].append(avg_reward)
+                stats['max_reward'].append(max_reward)
                 stats['avg_q'].append(avg_q)
                 stats['episodes'].append(episodes)
 
@@ -211,7 +212,7 @@ def evaluate_reward(model, env, config):
         if frames > config.num_eval:
             break
 
-    return sum(rewards) / len(rewards)
+    return sum(rewards) / len(rewards), max(rewards)
 
 
 if __name__ == '__main__':
