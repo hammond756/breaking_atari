@@ -146,28 +146,35 @@ def train(config):
 
             if frames % config.eval_every == 0:
                 model.eval()
-                avg_reward = evaluate_reward(model, env, config)
-                avg_q = evaluate_q_func(model, val_states)
+
+                with torch.no_grad():
+                    avg_reward = evaluate_reward(model, env, config)
+                    avg_q = evaluate_q_func(model, val_states)
 
                 print('Average reward: \t\t{}'.format(avg_reward))
                 print('Average q-val: \t\t{}'.format(avg_q))
 
+                # update statistics
                 stats['epoch'].append(len(stats['epoch']))
                 stats['avg_reward'].append(avg_reward)
                 stats['avg_q'].append(avg_q)
                 stats['episodes'].append(episodes)
-                
+
+                # save model
                 model_path = config.output_dir + '/dqn-{}'.format(len(stats['epoch']))
                 torch.save(model.state_dict(), model_path)
+
+                # save statistics
+                statistics = pd.DataFrame(stats)
+                statistics.to_csv(os.path.join(config.output_dir, 'stats.csv'), index_label='idx')
+
             if done:
                 rewards.append(total_reward)
                 episodes += 1
                 break
-        
+
         if frames > config.num_frames:
             break
-    statistics = pd.DataFrame(stats)
-    statistics.to_csv(os.path.join(config.output_dir, 'stats.csv'), index_label='idx')
 
 
 
