@@ -3,14 +3,14 @@ import torch.nn.functional as F
 
 import gym
 import os
-from collections import deque
+from collections import deque, defaultdict
 import pprint
 import pandas as pd
 
 
 from model.utils import select_action, get_observation, transform_observation, get_epsilon, random_action, generate_validation_states
 from model.memory import Transition
-from model.dqn import HandcraftedDQN, DQN, extract_features
+from model.dqn import MLP, DQN, extract_features
 from model.memory import ReplayMemory
 
 def optimize_model(model, target, memory, optimizer, config):
@@ -27,9 +27,9 @@ def optimize_model(model, target, memory, optimizer, config):
                                             device=model.device, dtype=torch.uint8)
     non_final_next_states = torch.stack([s for s in batch.next_state
                                                 if s is not None])
-    state_batch = torch.stack(batch.state)
-    action_batch = torch.cat(batch.action)
-    reward_batch = torch.cat(batch.reward)
+    state_batch = torch.stack(batch.state).to(model.device)
+    action_batch = torch.cat(batch.action).to(model.device)
+    reward_batch = torch.cat(batch.reward).to(model.device)
 
     # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
     # columns of actions taken. These are the actions which would've been taken
@@ -82,16 +82,8 @@ def train(config):
 
     frames = 0
     episodes = 0
-
     rewards = []
-
-    stats = {
-        'epoch' : [],
-        'avg_reward' : [],
-        'avg_q' : [],
-        'max_reward' : [],
-        'episodes' : []
-    }
+    stats = defaultdict(list)
 
     val_states = generate_validation_states(env, model, depth, 32)
 
@@ -130,7 +122,7 @@ def train(config):
             reward = torch.tensor([reward], device=model.device)
 
             # Store the transition in memory
-            replay_buffer.push(state, action, next_state, reward)
+            replay_buffer.push(state.cpu(), action.cpu(), next_state.cpu(), reward.cpu())
 
             # Move to the next state
             state = next_state
@@ -175,8 +167,6 @@ def train(config):
 
         if frames > config.num_frames:
             break
-
-
 
 def evaluate_q_func(model, val_states):
     predictions = model(val_states)
