@@ -10,7 +10,7 @@ import pandas as pd
 
 from model.utils import select_action, get_observation, transform_observation, get_epsilon, random_action, generate_validation_states
 from model.memory import Transition
-from model.dqn import MLP, DQN, extract_features
+from model.dqn import DQN, extract_features
 from model.memory import ReplayMemory
 
 def optimize_model(model, target, memory, optimizer, config):
@@ -26,7 +26,7 @@ def optimize_model(model, target, memory, optimizer, config):
     non_final_mask = torch.tensor(tuple(map(lambda s: s is not None, batch.next_state)),
                                             device=model.device, dtype=torch.uint8)
     non_final_next_states = torch.stack([s for s in batch.next_state
-                                                if s is not None])
+                                                if s is not None]).to(model.device)
     state_batch = torch.stack(batch.state).to(model.device)
     action_batch = torch.cat(batch.action).to(model.device)
     reward_batch = torch.cat(batch.reward).to(model.device)
