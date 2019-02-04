@@ -160,24 +160,17 @@ def evaluate_reward(model, env, config):
 
     while True:
         obs = env.reset()
-        history = deque(iterable=config.frame_stack*[obs], maxlen=config.frame_stack)
-        state = np.concatenate(list(history), axis=0)
-
         episode_reward = 0
 
         while True:
             # Select and perform an action
             epsilon = 0.05
-            action = select_action(model, state, action_dims, epsilon)
-            next_obs, reward, done = get_observation(env, action.item())
-            next_obs = model.prepare_input(next_obs)
-            history.append(next_obs)
-            next_state = torch.cat(list(history), dim=0)
+            action = select_action(model, obs, action_dims, epsilon)
+            next_obs, reward, done, _ = env.step(action.item())
             episode_reward += reward
 
             # Move to the next state
-            state = next_state
-
+            obs = next_obs
             frames += 1
 
             if done:

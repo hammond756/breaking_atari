@@ -5,7 +5,6 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 from cv2 import matchTemplate, TM_CCORR_NORMED, COLOR_BGR2GRAY, cvtColor, imread, addWeighted
-from .utils import transform_observation
 
 class DQN(nn.Module):
 
@@ -37,8 +36,14 @@ class DQN(nn.Module):
         self.device = device
         self.to(device)
 
-    def prepare_input(self, x):
-        return transform_observation(x, (self.h, self.w)).to(self.device)
+    def _prepare_single_input(self, x):
+        return torch.as_tensor(np.stack(x)[None, :, :, :].transpose((0,3,1,2)), dtype=torch.float)
+
+    def prepare_input(self, x, batch=False):
+        if not batch:
+            return self._prepare_single_input(x)
+        elif batch:
+            return torch.cat([self._prepare_single_input(_x) for _x in x])
 
     # Called with either one element to determine next action, or a batch
     # during optimization. Returns tensor([[left0exp,right0exp]...]).
@@ -74,11 +79,9 @@ def location_features(template, observation, grid, threshold=0.8):
 
 def extract_features(observation, templates, grid=np.array((5,5))):
 
-    gray = cvtColor(observation, COLOR_BGR2GRAY)
-
     locs = []
     for k, v in templates.items():
-        _features = location_features(v, gray, grid=grid)
+        _features = location_features(v, observation, grid=grid)
         locs.append(_features)
 
     locs = np.concatenate(locs)
@@ -122,11 +125,16 @@ class MLP(nn.Module):
         self.device = device
         self.to(device)
 
-    def prepare_input(self, x):
-        x = self._extract_features(x)
-        x = torch.tensor(x, dtype=torch.float)
-        x = x.to(self.device)
+    def _prepare_single_input(self, x):
+        x = self._extract_features(x.squeeze())
+        x = torch.tensor(x, dtype=torch.float, device=self.device).unsqueeze(0)
         return x
+
+    def prepare_input(self, x, batch=False):
+        if not batch:
+            return self._prepare_single_input(x)
+        else:
+            return torch.cat([self._prepare_single_input(_x) for _x in x])
 
     def _extract_features(self, observation, grid=np.array([5,5])):
         return extract_features(observation, self.templates, grid)
