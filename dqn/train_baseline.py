@@ -4,6 +4,7 @@ from .model.dqn import DQN
 import os
 import gym
 import argparse
+import torch
 
 if __name__ == '__main__':
 
@@ -15,7 +16,6 @@ if __name__ == '__main__':
     parser.add_argument('--eps_start', type=float, required=False, default=1.0)
     parser.add_argument('--eps_stop', type=float, required=False, default=0.1)
     parser.add_argument('--eps_steps', type=int, required=False, default=1000000)
-    parser.add_argument('--image_size', type=int, nargs=2, required=False, default=[110, 84])
     parser.add_argument('--target_update', type=int, required=False, default=10000)
     parser.add_argument('--num_frames', type=int, required=False, default=10000000)
     parser.add_argument('--num_eval', type=int, required=False, default=10000)
@@ -27,6 +27,9 @@ if __name__ == '__main__':
     parser.add_argument('--environment', type=str, required=True)
     parser.add_argument('--output_dir', type=str, required=True)
 
+    # model specific parameters
+    parser.add_argument('--image_size', type=int, nargs=2, required=False, default=[110, 84])
+
     config = parser.parse_args()
 
     if not os.path.isdir(config.output_dir):
@@ -37,6 +40,9 @@ if __name__ == '__main__':
     action_dims = env.action_space.n
 
     height, width = config.image_size
-    model = DQN(height, width, action_dims)
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-    train(model, env, config)
+    model = DQN(height, width, action_dims, device=device)
+    target = DQN(height, width, action_dims, device=device)
+
+    train(model, target, env, config)

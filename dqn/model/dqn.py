@@ -78,23 +78,18 @@ def extract_features(observation, templates, grid=np.array((5,5))):
 
     locs = []
     for k, v in templates.items():
-        if 'enemy' not in k:
-            continue
-
         _features = location_features(v, gray, grid=grid)
         locs.append(_features)
-
-    _self = location_features(templates['self'], gray, grid=grid)
-    locs.append(_self)
 
     locs = np.concatenate(locs)
 
     return locs
 
-class HandcraftedDQN(nn.Module):
 
-    def __init__(self, num_input, num_actions, device='cpu'):
-        super(HandcraftedDQN, self).__init__()
+class MLP(nn.Module):
+
+    def __init__(self, num_input, num_actions, sprites_dir, device='cpu'):
+        super(MLP, self).__init__()
 
         self.net = nn.Sequential(
             nn.Linear(num_input, 300),
@@ -111,7 +106,7 @@ class HandcraftedDQN(nn.Module):
             return avg
 
 
-        template_path = 'dqn/space_invader_sprites/enemy_{}_{}.png'
+        template_path = sprites_dir + 'enemy_{}_{}.png'
 
         self.templates = {
             'enemy_0' : read_averaged_template(template_path.format(0, 'a'), template_path.format(0, 'b')),
@@ -120,8 +115,8 @@ class HandcraftedDQN(nn.Module):
             'enemy_3' : read_averaged_template(template_path.format(3, 'a'), template_path.format(3, 'b')),
             'enemy_4' : read_averaged_template(template_path.format(4, 'a'), template_path.format(4, 'b')),
             'enemy_5' : read_averaged_template(template_path.format(5, 'a'), template_path.format(5, 'b')),
-            'self' : imread('dqn/space_invader_sprites/my_sprite.png', 0),
-            'defense' : imread('dqn/space_invader_sprites/defense.png', 0),
+            'self' : imread(sprites_dir + 'my_sprite.png', 0),
+            'defense' : imread(sprites_dir + 'defense.png', 0),
         }
 
         self.device = device

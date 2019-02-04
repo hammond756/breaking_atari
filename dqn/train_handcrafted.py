@@ -1,5 +1,5 @@
-from .train import train
-from .model.dqn import DQN
+from train import train
+from model.dqn import MLP
 
 import os
 import gym
@@ -28,7 +28,9 @@ if __name__ == '__main__':
     parser.add_argument('--output_dir', type=str, required=True)
 
     # model specific parameters
-    parser.add_argument('--image_size', type=int, nargs=2, required=False, default=[110, 84])
+    parser.add_argument('--grid_size', type=int, nargs=2, required=False, default=[32,42])
+    parser.add_argument('--n_object_types', type=int, required=False, default=8)
+    parser.add_argument('--sprites_dir', type=str, required=True)
 
     config = parser.parse_args()
 
@@ -39,10 +41,11 @@ if __name__ == '__main__':
     env = gym.make(config.environment)
     action_dims = env.action_space.n
 
-    height, width = config.image_size
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-    model = DQN(height, width, action_dims, device=device)
-    target = DQN(height, width, action_dims, device=device)
+    input_dims = config.grid_size[0] * config.grid_size[1] * config.n_object_types
+
+    model = MLP(input_dims, action_dims, config.sprites_dir, device=device)
+    target = MLP(input_dims, action_dims, config.sprites_dir, device=device)
 
     train(model, target, env, config)

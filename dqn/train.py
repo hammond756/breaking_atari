@@ -26,7 +26,8 @@ def optimize_model(model, target, memory, optimizer, config):
     non_final_mask = torch.tensor(tuple(map(lambda s: s is not None, batch.next_state)),
                                             device=model.device, dtype=torch.uint8)
     non_final_next_states = torch.stack([s for s in batch.next_state
-                                                if s is not None])
+                                                if s is not None]).to(model.device)
+
     state_batch = torch.stack(batch.state).to(model.device)
     action_batch = torch.cat(batch.action).to(model.device)
     reward_batch = torch.cat(batch.reward).to(model.device)
@@ -56,8 +57,7 @@ def optimize_model(model, target, memory, optimizer, config):
         param.grad.data.clamp_(-1, 1)
     optimizer.step()
 
-def train(config):
-    env = gym.make(config.environment)
+def train(model, target, env, config):
     action_dims = env.action_space.n
     depth = config.frame_stack
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -66,16 +66,6 @@ def train(config):
     print('Starting {}'.format(config.environment), 'on', device)
     pprint.pprint(config)
     print('------')
-
-    if not os.path.isdir(config.output_dir):
-        os.mkdir(config.output_dir)
-
-    height, width = config.image_size
-    model = DQN(height, width, action_dims, device)
-
-    target = DQN(height, width, action_dims, device)
-    target.load_state_dict(model.state_dict())
-    target.eval()
 
     optimizer = torch.optim.Adam(model.parameters(),lr=config.lr)
     replay_buffer = ReplayMemory(config.memory)
@@ -237,6 +227,21 @@ if __name__ == '__main__':
     parser.add_argument('--exploration_phase', type=int, required=False, default=50000)
     parser.add_argument('--frame_stack', type=int, required=False, default=4)
     parser.add_argument('--output_dir', type=str, required=True)
+    parser.add_argument('--model_name', type=str, required=True)
 
     config = parser.parse_args()
+
+    if not os.path.isdir(config.output_dir):
+        os.mkdir(config.output_dir)
+
+    # initialize environment
+    env = gym.make(config.environment)
+    action_dims = env.action_space.n
+
+    if config.model_name == 'DQN':
+        height, width = config.image_size
+        model = DQN(height, width, action_dims)
+    elif config.model_name == 'MLP':
+        model = MLP()
+
     train(config)
