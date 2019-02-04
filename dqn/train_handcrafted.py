@@ -1,5 +1,6 @@
 from train import train
 from model.dqn import MLP
+from dqn.atari_wrappers import wrap_deepmind
 
 import os
 import gym
@@ -39,6 +40,7 @@ if __name__ == '__main__':
 
     # initialize environment
     env = gym.make(config.environment)
+    env = wrap_deepmind(env, episode_life=True, clip_rewards=True, frame_stack=False, warp=(210,160))
     action_dims = env.action_space.n
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -47,5 +49,7 @@ if __name__ == '__main__':
 
     model = MLP(input_dims, action_dims, config.sprites_dir, device=device)
     target = MLP(input_dims, action_dims, config.sprites_dir, device=device)
+    target.load_state_dict(model.state_dict())
+    target.eval()
 
     train(model, target, env, config)

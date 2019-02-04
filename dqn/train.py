@@ -6,36 +6,32 @@ import os
 from collections import deque, defaultdict
 import pprint
 import pandas as pd
+import numpy as np
 
 
-from model.utils import select_action, get_observation, transform_observation, get_epsilon, random_action, generate_validation_states
-from model.memory import Transition
-from model.dqn import MLP, DQN, extract_features
-from model.memory import ReplayMemory
+from model.utils import select_action, get_epsilon, random_action, generate_validation_states
+from model.memory import ReplayBuffer
 
 def optimize_model(model, target, memory, optimizer, config):
+    # if len(memory) < config.batch_size:
+    #     return
+    states, actions, rewards, next_states, dones = memory.sample(config.batch_size)
 
-    transitions = memory.sample(config.batch_size)
-    # Transpose the batch (see https://stackoverflow.com/a/19343/3343043 for
-    # detailed explanation). This converts batch-array of Transitions
-    # to Transition of batch-arrays.
-    batch = Transition(*zip(*transitions))
+    states = model.prepare_input(states, batch=True)
+    next_states = model.prepare_input(next_states, batch=True)
 
     # Compute a mask of non-final states and concatenate the batch elements
     # (a final state would've been the one after which simulation ended)
-    non_final_mask = torch.tensor(tuple(map(lambda s: s is not None, batch.next_state)),
-                                            device=model.device, dtype=torch.uint8)
-    non_final_next_states = torch.stack([s for s in batch.next_state
-                                                if s is not None]).to(model.device)
+    non_final_mask = torch.as_tensor(np.logical_not(dones).astype(np.uint8), device=model.device)
+    non_final_next_states = next_states[non_final_mask]
 
-    state_batch = torch.stack(batch.state).to(model.device)
-    action_batch = torch.cat(batch.action).to(model.device)
-    reward_batch = torch.cat(batch.reward).to(model.device)
+    action_batch = torch.as_tensor(np.concatenate(actions), device=model.device, dtype=torch.long)
+    reward_batch = torch.as_tensor(np.concatenate(rewards[None,:]), device=model.device, dtype=torch.float)
 
     # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
     # columns of actions taken. These are the actions which would've been taken
     # for each batch state according to policy_net
-    state_action_values = model(state_batch).gather(1, action_batch)
+    state_action_values = model(states).gather(1, action_batch)
 
     # Compute V(s_{t+1}) for all next states.
     # Expected values of actions for non_final_next_states are computed based
@@ -43,7 +39,9 @@ def optimize_model(model, target, memory, optimizer, config):
     # This is merged based on the mask, such that we'll have either the expected
     # state value or 0 in case the state was final.
     next_state_values = torch.zeros(config.batch_size, device=model.device)
-    next_state_values[non_final_mask] = target(non_final_next_states).max(1)[0].detach()
+    target_output = target(non_final_next_states).max(1)[0].detach()
+    next_state_values[non_final_mask] = target_output
+
     # Compute the expected Q values
     expected_state_action_values = (next_state_values * config.gamma) + reward_batch
 
@@ -59,7 +57,6 @@ def optimize_model(model, target, memory, optimizer, config):
 
 def train(model, target, env, config):
     action_dims = env.action_space.n
-    depth = config.frame_stack
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     print('------')
@@ -68,23 +65,20 @@ def train(model, target, env, config):
     print('------')
 
     optimizer = torch.optim.Adam(model.parameters(),lr=config.lr)
-    replay_buffer = ReplayMemory(config.memory)
+    replay_buffer = ReplayBuffer(config.memory)
 
     frames = 0
     episodes = 0
     rewards = []
     stats = defaultdict(list)
 
-    val_states = generate_validation_states(env, model, depth, 32)
+    with torch.no_grad():
+        model.eval()
+        val_states = generate_validation_states(env, model.device, 512)
 
     while True:
-        # Initialize the environment and state
-        obs, _, _ = get_observation(env)
-        obs = model.prepare_input(obs)
-        history = deque(iterable=depth*[obs], maxlen=depth)
-
-        state = torch.cat(list(history), dim=0)
-
+        # Initialize the environment
+        obs = env.reset()
         total_reward = 0
 
         while True:
@@ -92,30 +86,24 @@ def train(model, target, env, config):
             if frames % 100 == 0:
                 print("{} / {} frames done".format(frames, config.num_frames))
 
-            # Select and perform an action
+            # get epsilon based on number of frames
             epsilon = get_epsilon(frames, config.eps_start, config.eps_stop, config.eps_steps)
 
             # first acquire enough experience for samples to be decorrelated
             if frames > config.exploration_phase:
-                action = select_action(model, state, action_dims, epsilon)
+                action = select_action(model, obs, action_dims, epsilon)
             else:
                 action = random_action(action_dims, model.device)
 
-            next_obs, reward, done = get_observation(env, action.item())
-            next_obs = model.prepare_input(next_obs)
-            history.append(next_obs)
-            next_state = torch.cat(list(history), dim=0)
+            next_obs, reward, done, _ = env.step(action.item())
 
             frames += 1
-
             total_reward += reward
-            reward = torch.tensor([reward], device=model.device)
 
-            # Store the transition in memory
-            replay_buffer.push(state.cpu(), action.cpu(), next_state.cpu(), reward.cpu())
+            replay_buffer.add(obs, action, reward, next_obs, done)
 
             # Move to the next state
-            state = next_state
+            obs = next_obs
 
             if frames % 4 == 0 and len(replay_buffer) > config.exploration_phase:
                 # Perform one step of the optimization (on the target network)
@@ -128,7 +116,6 @@ def train(model, target, env, config):
 
             if frames % config.eval_every == 0:
                 model.eval()
-
                 with torch.no_grad():
                     avg_reward, max_reward = evaluate_reward(model, env, config)
                     avg_q = evaluate_q_func(model, val_states)
@@ -167,16 +154,14 @@ def evaluate_q_func(model, val_states):
 
 def evaluate_reward(model, env, config):
     action_dims = env.action_space.n
-    model.eval()
 
     rewards = []
     frames = 0
 
     while True:
-        obs, _, _ = get_observation(env)
-        obs = model.prepare_input(obs)
+        obs = env.reset()
         history = deque(iterable=config.frame_stack*[obs], maxlen=config.frame_stack)
-        state = torch.cat(list(history), dim=0)
+        state = np.concatenate(list(history), axis=0)
 
         episode_reward = 0
 
@@ -202,46 +187,7 @@ def evaluate_reward(model, env, config):
         if frames > config.num_eval:
             break
 
-    return sum(rewards) / len(rewards), max(rewards)
+    avg_reward = sum(rewards) / len(rewards)
+    max_reward = max(rewards)
 
-
-if __name__ == '__main__':
-    import argparse
-
-    parser = argparse.ArgumentParser()
-
-    # defaults come from Mnih et al. (2015)
-    parser.add_argument('--batch_size', type=str, required=False, default=32)
-    parser.add_argument('-gamma', type=float, required=False, default=0.99)
-    parser.add_argument('--eps_start', type=float, required=False, default=1.0)
-    parser.add_argument('--eps_stop', type=float, required=False, default=0.1)
-    parser.add_argument('--eps_steps', type=int, required=False, default=1000000)
-    parser.add_argument('--image_size', type=int, nargs=2, required=False, default=[110, 84])
-    parser.add_argument('--environment', type=str, required=True)
-    parser.add_argument('--target_update', type=int, required=False, default=10000)
-    parser.add_argument('--num_frames', type=int, required=False, default=10000000)
-    parser.add_argument('--num_eval', type=int, required=False, default=10000)
-    parser.add_argument('--eval_every', type=int, required=False, default=100000)
-    parser.add_argument('--lr', type=float, required=False, default=0.00025)
-    parser.add_argument('--memory', type=int, required=False, default=1000000)
-    parser.add_argument('--exploration_phase', type=int, required=False, default=50000)
-    parser.add_argument('--frame_stack', type=int, required=False, default=4)
-    parser.add_argument('--output_dir', type=str, required=True)
-    parser.add_argument('--model_name', type=str, required=True)
-
-    config = parser.parse_args()
-
-    if not os.path.isdir(config.output_dir):
-        os.mkdir(config.output_dir)
-
-    # initialize environment
-    env = gym.make(config.environment)
-    action_dims = env.action_space.n
-
-    if config.model_name == 'DQN':
-        height, width = config.image_size
-        model = DQN(height, width, action_dims)
-    elif config.model_name == 'MLP':
-        model = MLP()
-
-    train(config)
+    return avg_reward, max_reward

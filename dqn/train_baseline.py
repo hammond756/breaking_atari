@@ -1,10 +1,12 @@
-from .train import train
-from .model.dqn import DQN
+import argparse
 
+from train import train
+from model.dqn import DQN
+from atari_wrappers import wrap_deepmind
 import os
 import gym
-import argparse
 import torch
+
 
 if __name__ == '__main__':
 
@@ -37,6 +39,7 @@ if __name__ == '__main__':
 
     # initialize environment
     env = gym.make(config.environment)
+    env = wrap_deepmind(env, episode_life=True, clip_rewards=True, frame_stack=True, warp=config.image_size)
     action_dims = env.action_space.n
 
     height, width = config.image_size
@@ -44,5 +47,7 @@ if __name__ == '__main__':
 
     model = DQN(height, width, action_dims, device=device)
     target = DQN(height, width, action_dims, device=device)
+    target.load_state_dict(model.state_dict())
+    target.eval()
 
     train(model, target, env, config)
