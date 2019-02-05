@@ -55,7 +55,6 @@ def optimize_model(model, target, memory, optimizer, config):
 
 def train(model, target, env, config):
     action_dims = env.action_space.n
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     print('------')
     print('Starting {}'.format(config.environment), 'on', device)

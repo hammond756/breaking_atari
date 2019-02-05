@@ -25,7 +25,7 @@ def get_epsilon(it, start, stop, steps):
 
     return epsilons[it]
 
-def generate_validation_states(env, device, k):
+def generate_validation_states(env, model, k):
     obs = env.reset()
 
     candidate_states = [obs]
@@ -39,7 +39,6 @@ def generate_validation_states(env, device, k):
             env.reset()
 
     sample = random.sample(candidate_states, k)
-    sample = [np.stack(state)[None, :, :, :] for state in sample]
-    sample = torch.as_tensor(np.concatenate(sample).transpose((0,3,2,1)), device=device)
+    sample = model.prepare_input(sample, batch=True)
 
     return sample
