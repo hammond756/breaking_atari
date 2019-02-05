@@ -29,7 +29,6 @@ def generate_validation_states(env, model, k):
     obs = env.reset()
 
     candidate_states = [obs]
-
     for _ in range(10*k):
         rand_action = random.randrange(env.action_space.n)
         obs, reward, done, _ = env.step(rand_action)
