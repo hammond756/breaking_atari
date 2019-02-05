@@ -29,7 +29,6 @@ def generate_validation_states(env, device, k):
     obs = env.reset()
 
     candidate_states = [obs]
-
     for _ in range(10*k):
         rand_action = random.randrange(env.action_space.n)
         obs, reward, done, _ = env.step(rand_action)
@@ -40,6 +39,6 @@ def generate_validation_states(env, device, k):
 
     sample = random.sample(candidate_states, k)
     sample = [np.stack(state)[None, :, :, :] for state in sample]
-    sample = torch.as_tensor(np.concatenate(sample).transpose((0,3,2,1)), device=device)
+    sample = torch.as_tensor(np.concatenate(sample).transpose((0,3,2,1)), device=device, dtype=torch.float)
 
     return sample

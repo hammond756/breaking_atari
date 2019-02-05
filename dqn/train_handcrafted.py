@@ -1,6 +1,6 @@
 from train import train
 from model.dqn import MLP
-from dqn.atari_wrappers import wrap_deepmind
+from atari_wrappers import wrap_deepmind
 
 import os
 import gym
