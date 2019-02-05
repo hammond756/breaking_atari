@@ -37,7 +37,7 @@ class DQN(nn.Module):
         self.to(device)
 
     def _prepare_single_input(self, x):
-        return torch.as_tensor(np.stack(x)[None, :, :, :].transpose((0,3,1,2)), dtype=torch.float)
+        return torch.as_tensor(np.stack(x)[None, :, :, :].transpose((0,3,1,2)), dtype=torch.float, device=self.device)
 
     def prepare_input(self, x, batch=False):
         if not batch:

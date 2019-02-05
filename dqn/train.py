@@ -1,15 +1,13 @@
 import torch
 import torch.nn.functional as F
 
-import gym
 import os
 from collections import deque, defaultdict
 import pprint
 import pandas as pd
 import numpy as np
 
-
-from model.utils import select_action, get_epsilon, random_action, generate_validation_states
+from utils import select_action, get_epsilon, random_action, generate_validation_states
 from model.memory import ReplayBuffer
 
 def optimize_model(model, target, memory, optimizer, config):
