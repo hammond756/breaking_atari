@@ -13,7 +13,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     # defaults come from Mnih et al. (2015)
-    parser.add_argument('--batch_size', type=str, required=False, default=32)
+    parser.add_argument('--batch_size', type=int, required=False, default=32)
     parser.add_argument('--gamma', type=float, required=False, default=0.99)
     parser.add_argument('--eps_start', type=float, required=False, default=1.0)
     parser.add_argument('--eps_stop', type=float, required=False, default=0.1)
@@ -28,6 +28,7 @@ if __name__ == '__main__':
     parser.add_argument('--frame_stack', type=int, required=False, default=4)
     parser.add_argument('--environment', type=str, required=True)
     parser.add_argument('--output_dir', type=str, required=True)
+    parser.add_argument('--optimize_every', type=int, required=False, default=4)
 
     # model specific parameters
     parser.add_argument('--image_size', type=int, nargs=2, required=False, default=[110, 84])

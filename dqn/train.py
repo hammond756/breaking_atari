@@ -57,9 +57,11 @@ def train(model, target, env, config):
     action_dims = env.action_space.n
 
     print('------')
-    print('Starting {}'.format(config.environment), 'on', device)
+    print('Starting {}'.format(config.environment), 'on', model.device)
     pprint.pprint(config)
     print('------')
+
+    print('MODEL', model)
 
     optimizer = torch.optim.Adam(model.parameters(),lr=config.lr)
     replay_buffer = ReplayBuffer(config.memory)
@@ -71,7 +73,7 @@ def train(model, target, env, config):
 
     with torch.no_grad():
         model.eval()
-        val_states = generate_validation_states(env, model.device, 512)
+        val_states = generate_validation_states(env, model, 512)
 
     while True:
         # Initialize the environment
@@ -102,7 +104,7 @@ def train(model, target, env, config):
             # Move to the next state
             obs = next_obs
 
-            if frames % 4 == 0 and len(replay_buffer) > config.exploration_phase:
+            if frames % config.optimize_every == 0 and len(replay_buffer) > config.exploration_phase:
                 # Perform one step of the optimization (on the target network)
                 model.train()
                 optimize_model(model, target, replay_buffer, optimizer, config)
