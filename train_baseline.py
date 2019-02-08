@@ -28,6 +28,7 @@ if __name__ == '__main__':
     parser.add_argument('--environment', type=str, required=True)
     parser.add_argument('--output_dir', type=str, required=True)
     parser.add_argument('--optimize_every', type=int, required=False, default=4)
+    parser.add_argument('--device', type=str, required=True)
 
     # model specific parameters
     parser.add_argument('--image_size', type=int, nargs=2, required=False, default=[110, 84])
@@ -40,10 +41,9 @@ if __name__ == '__main__':
     # initialize environment
     env = gym.make(config.environment)
     env = wrap_deepmind(env, episode_life=True, clip_rewards=True, frame_stack=True, warp=config.image_size)
-    action_dims = env.action_space.n
 
+    action_dims = env.action_space.n
     height, width = config.image_size
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     model = ConvNet(height, width, action_dims, device=device)
     target = ConvNet(height, width, action_dims, device=device)

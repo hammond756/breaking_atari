@@ -28,7 +28,8 @@ if __name__ == '__main__':
     parser.add_argument('--environment', type=str, required=True)
     parser.add_argument('--output_dir', type=str, required=True)
     parser.add_argument('--optimize_every', type=str, required=False, default=4)
-
+    parser.add_argument('--device', type=str, required=True)
+    
     # model specific parameters
     parser.add_argument('--grid_size', type=int, nargs=2, required=False, default=[32,42])
     parser.add_argument('--n_object_types', type=int, required=False, default=8)
@@ -42,10 +43,8 @@ if __name__ == '__main__':
     # initialize environment
     env = gym.make(config.environment)
     env = wrap_deepmind(env, episode_life=True, clip_rewards=True, frame_stack=False, warp=(210,160))
+    
     action_dims = env.action_space.n
-
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-
     input_dims = config.grid_size[0] * config.grid_size[1] * config.n_object_types
 
     model = MLP(input_dims, action_dims, config.sprites_dir, device=device)

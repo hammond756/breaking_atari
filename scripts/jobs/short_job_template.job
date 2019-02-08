@@ -2,7 +2,6 @@
 #SBATCH -N 1          	    # request 1 node(s)
 #SBATCH -p gpu_short        # gpu for production, gpu_short for test
 #SBATCH -t 0-01:00:00       # 5 days is the max for gpu, 1 h max for short
-#SBATCH -o /home/arond/outputs/%j/slurm-%j.out
 
 echo Starting ${SLURM_JOB_NAME} ${SLURM_JOBID}
 
