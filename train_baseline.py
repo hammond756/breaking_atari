@@ -45,8 +45,8 @@ if __name__ == '__main__':
     action_dims = env.action_space.n
     height, width = config.image_size
 
-    model = ConvNet(height, width, action_dims, device=device)
-    target = ConvNet(height, width, action_dims, device=device)
+    model = ConvNet(height, width, action_dims, device=config.device)
+    target = ConvNet(height, width, action_dims, device=config.device)
     target.load_state_dict(model.state_dict())
     target.eval()
 
