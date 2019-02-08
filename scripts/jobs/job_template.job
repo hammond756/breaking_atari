@@ -1,0 +1,29 @@
+#!/bin/bash
+#SBATCH -N 1          	    # request 1 node(s)
+#SBATCH -p gpu        	    # gpu for production, gpu_short for test
+#SBATCH -t 0-78:00:00       # 5 days is the max for gpu, 1 h max for short 
+#SBATCH --mail-type=END
+#SBATCH --mail-user=hammond756@live.nl
+
+# prepare dependent job to move data back
+# use afterany to always execute, or afterok on successful exit of this job
+# uncomment this to automatically archive job
+#sbatch --dependency=afterany:$SLURM_JOB_ID archive.job $SLURM_JOB_ID $(readlink -f $TMPDIR)
+
+echo starting job ${SLURM_JOB_NAME} ${SLURM_JOBID}
+
+module load python/3.5.0
+module load CUDA/9.0.176
+module load cuDNN/7.0.5-CUDA-9.0.176
+
+# Set correct working directory
+cd "${HOME}/breaking_atari/jobs"
+
+# update environment
+source ../.venv/bin/activate
+#pip install -r requirements.txt
+
+# execute code
+srun --multi-prog jobs.conf
+
+echo end of job
