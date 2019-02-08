@@ -1,12 +1,8 @@
 #!/bin/bash
 #SBATCH -N 1          	    # request 1 node(s)
-#SBATCH -p gpu_short        	    # gpu for production, gpu_short for test
-#SBATCH -t 0-01:00:00       # 5 days is the max for gpu, 1 h max for short 
-
-# prepare dependent job to move data back
-# use afterany to always execute, or afterok on successful exit of this job
-# uncomment this to automatically archive job
-#sbatch --dependency=afterany:$SLURM_JOB_ID archive.job $SLURM_JOB_ID $(readlink -f $TMPDIR)
+#SBATCH -p gpu_short        # gpu for production, gpu_short for test
+#SBATCH -t 0-01:00:00       # 5 days is the max for gpu, 1 h max for short
+#SBATCH -o /home/arond/outputs/%j/slurm-%j.out
 
 echo Starting ${SLURM_JOB_NAME} ${SLURM_JOBID}
 
@@ -17,17 +13,17 @@ module load cuDNN/7.0.5-CUDA-9.0.176
 echo Finished loading models
 
 # Set correct working directory
-cd "${HOME}/breaking_atari/jobs"
+cd "${HOME}/breaking_atari/"
 
 # update environment
-source ../.venv/bin/activate
-#pip install -r requirements.txt
+source .venv/bin/activate
+pip install -r requirements.txt
 
 # execute code
-srun --multi-prog jobs.conf
+srun --multi-prog scripts/jobs/jobs.conf
 
 wait
 
-cp $TMPDIR/ $HOME/breaking_atari/jobs/$SLURM_JOBID
+cp -r $TMPDIR/ $HOME/outputs/$SLURM_JOBID
 
 echo end of job
