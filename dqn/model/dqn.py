@@ -60,35 +60,6 @@ def tile(coords, grid):
 
     return new_y, new_x
 
-def location_features(template, observation, grid, threshold=0.8):
-
-    assert type(grid) == type(np.array([0])), type(grid)
-    assert observation.shape[0] % grid[0] == 0
-    assert observation.shape[1] % grid[1] == 0
-
-    result = matchTemplate(observation, template, TM_CCORR_NORMED)
-    loc = np.where(result > threshold)
-    tiled = tile(loc, grid=grid)
-
-    _new_shape = np.divide(observation.shape, grid).astype(np.int)
-    _zeros = np.zeros(_new_shape)
-    _zeros[tiled] = 1
-    flat = _zeros.flatten()
-
-    return flat
-
-def extract_features(observation, templates, grid=np.array((5,5))):
-
-    locs = []
-    for k, v in templates.items():
-        _features = location_features(v, observation, grid=grid)
-        locs.append(_features)
-
-    locs = np.concatenate(locs)
-
-    return locs
-
-
 class MLP(nn.Module):
 
     def __init__(self, num_input, num_actions, sprites_dir, device='cpu'):
