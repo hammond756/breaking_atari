@@ -2,13 +2,13 @@ import torch
 import torch.nn.functional as F
 
 import os
-from collections import deque, defaultdict
+from collections import defaultdict
 import pprint
 import pandas as pd
 import numpy as np
 
-from utils import select_action, get_epsilon, random_action, generate_validation_states
-from model.memory import ReplayBuffer
+from breaking_atari.utils import select_action, get_epsilon, random_action, generate_validation_states
+from breaking_atari.models.memory import ReplayBuffer
 
 def optimize_model(model, target, memory, optimizer, config):
     # if len(memory) < config.batch_size:

@@ -1,8 +1,8 @@
 import argparse
 import gym
 import torch
-from atari_wrappers import wrap_deepmind
-from utils import select_action
+from breaking_atari.atari_wrappers.openai_wrappers import wrap_deepmind
+from breaking_atari.utils import select_action
 
 def import_class(name):
     module, class_name = name.rsplit('.', 1)

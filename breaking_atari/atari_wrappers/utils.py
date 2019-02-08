@@ -38,14 +38,14 @@ def tile(coords, grid):
     """
     Transform from pixel-level coordinate to location in a more coarse grid
     """
-    new_y = np.floor(coords[0,:] / grid[0]).astype(np.int)
-    new_x = np.floor(coords[1,:] / grid[1]).astype(np.int)
+    new_y = np.floor(coords[0] / grid[0]).astype(np.int)
+    new_x = np.floor(coords[1] / grid[1]).astype(np.int)
 
     return new_y, new_x
 
 def object_locations(template, image, threshold):
     correlations = matchTemplate(image, template, TM_CCORR_NORMED)
-    return np.array(np.where(correlations > threshold)).T
+    return np.where(correlations > threshold)
 
 def _create_stamps(template, image, coordinates):
 
@@ -53,8 +53,8 @@ def _create_stamps(template, image, coordinates):
     height, width = template.shape
 
     # calculate offsets based on image boundaries
-    y_offset = np.minimum(coordinates[:,0] + height, image.shape[0])
-    x_offset = np.minimum(coordinates[:,1] + width, image.shape[1])
+    y_offset = np.minimum(coordinates[0] + height, image.shape[0])
+    x_offset = np.minimum(coordinates[1] + width, image.shape[1])
 
     for i, (y, x) in enumerate(coordinates):
         canvas[y:y_offset[i], x:x_offset[i]] = template.stamp
@@ -70,13 +70,13 @@ def mask(templates, image, threshold):
 
     return channels
 
-def location_features(template, observation, grid, threshold=0.8):
+def location_features(template, observation, grid, threshold):
 
     assert type(grid) == type(np.array([0])), type(grid)
     assert observation.shape[0] % grid[0] == 0
     assert observation.shape[1] % grid[1] == 0
 
-    loc = object_locations(observation, template)
+    loc = object_locations(observation, template, threshold)
     tiled = tile(loc, grid=grid)
 
     _new_shape = np.divide(observation.shape, grid).astype(np.int)
@@ -86,11 +86,11 @@ def location_features(template, observation, grid, threshold=0.8):
 
     return flat
 
-def extract_features(observation, templates, grid=np.array((5,5))):
+def extract_features(observation, templates, grid, threshold):
 
     locs = []
     for k, v in templates.items():
-        _features = location_features(v, observation, grid=grid)
+        _features = location_features(v, observation, grid, threshold)
         locs.append(_features)
 
     locs = np.concatenate(locs)

@@ -1,19 +1,18 @@
-import argparse
+from breaking_atari.train import train
+from breaking_atari.models.MLP import MLP
+from breaking_atari.atari_wrappers.openai_wrappers import wrap_deepmind
 
-from train import train
-from model.dqn import DQN
-from atari_wrappers import wrap_deepmind
 import os
 import gym
+import argparse
 import torch
-
 
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
 
     # defaults come from Mnih et al. (2015)
-    parser.add_argument('--batch_size', type=int, required=False, default=32)
+    parser.add_argument('--batch_size', type=str, required=False, default=32)
     parser.add_argument('--gamma', type=float, required=False, default=0.99)
     parser.add_argument('--eps_start', type=float, required=False, default=1.0)
     parser.add_argument('--eps_stop', type=float, required=False, default=0.1)
@@ -28,10 +27,12 @@ if __name__ == '__main__':
     parser.add_argument('--frame_stack', type=int, required=False, default=4)
     parser.add_argument('--environment', type=str, required=True)
     parser.add_argument('--output_dir', type=str, required=True)
-    parser.add_argument('--optimize_every', type=int, required=False, default=4)
+    parser.add_argument('--optimize_every', type=str, required=False, default=4)
 
     # model specific parameters
-    parser.add_argument('--image_size', type=int, nargs=2, required=False, default=[110, 84])
+    parser.add_argument('--grid_size', type=int, nargs=2, required=False, default=[32,42])
+    parser.add_argument('--n_object_types', type=int, required=False, default=8)
+    parser.add_argument('--sprites_dir', type=str, required=True)
 
     config = parser.parse_args()
 
@@ -40,14 +41,15 @@ if __name__ == '__main__':
 
     # initialize environment
     env = gym.make(config.environment)
-    env = wrap_deepmind(env, episode_life=True, clip_rewards=True, frame_stack=True, warp=config.image_size)
+    env = wrap_deepmind(env, episode_life=True, clip_rewards=True, frame_stack=False, warp=(210,160))
     action_dims = env.action_space.n
 
-    height, width = config.image_size
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-    model = DQN(height, width, action_dims, device=device)
-    target = DQN(height, width, action_dims, device=device)
+    input_dims = config.grid_size[0] * config.grid_size[1] * config.n_object_types
+
+    model = MLP(input_dims, action_dims, config.sprites_dir, device=device)
+    target = MLP(input_dims, action_dims, config.sprites_dir, device=device)
     target.load_state_dict(model.state_dict())
     target.eval()
 
