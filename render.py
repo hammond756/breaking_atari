@@ -28,7 +28,8 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_class', type=str, required=True)
-    parser.add_argument('--parameters', type=str, required=False)
+    parser.add_argument('--checkpoints', type=str, required=False)
+    parser.add_argument('--parameters', type=int, required=False, default=False)
     parser.add_argument('--image_size', type=int, nargs=2, required=True)
     parser.add_argument('--environment', type=str, required=True)
     parser.add_argument('--model_config', type=int, nargs='+', required=True)
@@ -43,7 +44,14 @@ if __name__ == '__main__':
 
     model = ModelClass(*config.model_config)
 
-    for ep in range(1,53):
-        state_dict = torch.load('../baseline_results/baseline_results/dqn-{}'.format(ep), map_location=lambda storage, loc: storage)
+    if config.parameters:
+        state_dict = torch.load(config.checkpoints + config.parameters)
         model.load_state_dict(state_dict)
         render(model, env)
+    else:
+
+        for ep in range(1,92):
+            print('Rendering model at epoch {}'.format(ep))
+            state_dict = torch.load(config.checkpoints + 'dqn-{}'.format(ep), map_location=lambda storage, loc: storage)
+            model.load_state_dict(state_dict)
+            render(model, env)

@@ -7,9 +7,9 @@ import numpy as np
 
 class ConvNet(nn.Module):
 
-    def __init__(self, h, w, action_dims, device='cpu'):
+    def __init__(self, c, h, w, action_dims, device='cpu'):
         super(ConvNet, self).__init__()
-        self.conv1 = nn.Conv2d(4, 16, kernel_size=5, stride=2)
+        self.conv1 = nn.Conv2d(c, 16, kernel_size=5, stride=2)
         self.bn1 = nn.BatchNorm2d(16)
         self.conv2 = nn.Conv2d(16, 32, kernel_size=5, stride=2)
         self.bn2 = nn.BatchNorm2d(32)
