@@ -1,8 +1,12 @@
 from cv2 import matchTemplate, TM_CCORR_NORMED, imread
 import numpy as np
+import os
 
 class Template(object):
     def __init__(self, path, obj_type, stamp_dir=False):
+
+        assert os.path.isfile(path), "Invalid image path in Template: {}".format(path)
+
         self.path = path
         self.obj_type = obj_type
         self.image = imread(path, 0)
@@ -34,38 +38,40 @@ class Template(object):
         else:
             return self.image.shape
 
-def tile(coords, grid):
+def tile(coordinates, grid):
     """
     Transform from pixel-level coordinate to location in a more coarse grid
     """
-    new_y = np.floor(coords[0] / grid[0]).astype(np.int)
-    new_x = np.floor(coords[1] / grid[1]).astype(np.int)
+    new_y = np.floor(coordinates[0] / grid[0]).astype(np.int)
+    new_x = np.floor(coordinates[1] / grid[1]).astype(np.int)
 
     return new_y, new_x
 
-def object_locations(template, image, threshold):
-    correlations = matchTemplate(image, template, TM_CCORR_NORMED)
+def object_locations(template_im, image, threshold):
+    correlations = matchTemplate(image, template_im, TM_CCORR_NORMED)
     return np.where(correlations > threshold)
 
-def _create_stamps(template, image, coordinates):
+def create_stamps(template, image, coordinates):
 
     canvas = np.zeros_like(image)
     height, width = template.shape
 
-    # calculate offsets based on image boundaries
-    y_offset = np.minimum(coordinates[0] + height, image.shape[0])
-    x_offset = np.minimum(coordinates[1] + width, image.shape[1])
+    y, x = coordinates
 
-    for i, (y, x) in enumerate(coordinates):
-        canvas[y:y_offset[i], x:x_offset[i]] = template.stamp
+    # calculate offsets based on image boundaries
+    y_offset = np.minimum(y + height, image.shape[0])
+    x_offset = np.minimum(x + width, image.shape[1])
+
+    for i in range(y.size):
+        canvas[y[i]:y_offset[i], x[i]:x_offset[i]] = template.stamp
 
     return canvas
 
 def mask(templates, image, threshold):
     channels = np.zeros((image.shape[0], image.shape[1], 3))
     for template in templates:
-        coords = object_locations(template.image, image, threshold)
-        obj_channel = _create_stamps(template, image, coords)
+        coordinates = object_locations(template.image, image, threshold)
+        obj_channel = create_stamps(template, image, coordinates)
         channels[:,:,template.channel] += obj_channel
 
     return channels
@@ -79,10 +85,10 @@ def location_features(template, observation, grid, threshold):
     loc = object_locations(observation, template, threshold)
     tiled = tile(loc, grid=grid)
 
-    _new_shape = np.divide(observation.shape, grid).astype(np.int)
-    _zeros = np.zeros(_new_shape)
-    _zeros[tiled] = 1
-    flat = _zeros.flatten()
+    new_shape = np.divide(observation.shape, grid).astype(np.int)
+    zeros = np.zeros(new_shape)
+    zeros[tiled] = 1
+    flat = zeros.flatten()
 
     return flat
 
