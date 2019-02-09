@@ -42,7 +42,7 @@ if __name__ == '__main__':
     env = wrap_deepmind(env, episode_life=True, clip_rewards=True, frame_stack=True, warp=config.image_size)
 
     action_dims = env.action_space.n
-    height, width = config.image_size
+    height, width, channels = env.observation_space.shape
 
     model = ConvNet(config.frame_stack, height, width, action_dims, device=config.device)
     target = ConvNet(config.frame_stack, height, width, action_dims, device=config.device)

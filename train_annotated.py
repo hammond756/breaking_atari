@@ -66,7 +66,7 @@ if __name__ == '__main__':
     env = AnnotateFrame(env, templates=load_templates(config.sprites_dir), threshold=0.95)
     
     action_dims = env.action_space.n
-    channels, height, width = env.observation_space.shape
+    height, width, channels = env.observation_space.shape
 
     model = ConvNet(channels, height, width, action_dims, device=config.device)
     target = ConvNet(channels, height, width, action_dims, device=config.device)
