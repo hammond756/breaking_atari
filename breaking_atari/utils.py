@@ -38,6 +38,5 @@ def generate_validation_states(env, model, k):
             env.reset()
 
     sample = random.sample(candidate_states, k)
-    sample = model.prepare_input(sample, batch=True)
 
     return sample

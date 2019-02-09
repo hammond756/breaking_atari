@@ -1,4 +1,4 @@
-from cv2 import matchTemplate, TM_CCORR_NORMED, TM_CCORR, imread
+from cv2 import matchTemplate, TM_CCORR_NORMED, imread
 import numpy as np
 import os
 

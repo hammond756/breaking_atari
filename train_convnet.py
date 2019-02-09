@@ -4,7 +4,8 @@ import gym
 from breaking_atari.BaseParser import BaseParser
 from breaking_atari.train import train
 from breaking_atari.models.ConvNet import ConvNet
-from breaking_atari.atari_wrappers.openai_wrappers import wrap_deepmind
+from breaking_atari.atari_wrappers.openai_wrappers import wrap_deepmind, FrameStack, WarpFrame
+from breaking_atari.atari_wrappers.cartpole_visual import CartPoleVisual
 
 if __name__ == '__main__':
 
@@ -20,7 +21,11 @@ if __name__ == '__main__':
 
     # initialize environment
     env = gym.make(config.environment)
-    env = wrap_deepmind(env, episode_life=True, clip_rewards=True, frame_stack=True, warp=config.image_size)
+    if config.environment == 'CartPole-v0':
+        env = CartPoleVisual(env, height=config.image_size[0], width=config.image_size[1])
+        env = FrameStack(env, config.frame_stack)
+    else:
+        env = wrap_deepmind(env, episode_life=True, clip_rewards=True, frame_stack=True, warp=config.image_size)
 
     action_dims = env.action_space.n
     height, width, channels = env.observation_space.shape

@@ -73,7 +73,8 @@ def train(model, target, env, config):
 
     with torch.no_grad():
         model.eval()
-        val_states = generate_validation_states(env, model, config.n_validation_states)
+        val_states = env.reset() # track expected value of initial state as proxy for learning
+        # val_states = generate_validation_states(env, model, config.n_validation_states)
 
     while True:
         # Initialize the environment
@@ -144,12 +145,13 @@ def train(model, target, env, config):
             break
 
 def evaluate_q_func(model, val_states):
+    val_states = model.prepare_input(val_states)
     predictions = model(val_states)
     max_q, argmax_q = torch.max(predictions, dim=1)
 
     avg_q = max_q.mean().item()
 
-    print("Avg Q(s,a): \t\t{}".format(avg_q))
+    print("Avg Q(s,a): \t\t{:.5}".format(avg_q))
 
     return avg_q
 
@@ -164,8 +166,9 @@ def evaluate_reward(model, env, config):
         obs = env.reset()
         episode_reward = 0
         episode_duration = 0
+        done = False
 
-        while True:
+        while not done:
             # Select and perform an action
             epsilon = 0.05
             action = select_action(model, obs, action_dims, epsilon)
@@ -180,7 +183,6 @@ def evaluate_reward(model, env, config):
             if done:
                 rewards.append(episode_reward)
                 durations.append(episode_duration)
-                break
 
         if frames > config.num_eval:
             break
@@ -192,7 +194,7 @@ def evaluate_reward(model, env, config):
     print('Evaluated on {} episodes'.format(len(rewards)))
     print('Avg reward: \t\t{}'.format(avg_reward))
     print('Max reward: \t\t{}'.format(avg_reward))
-    print('Avg Duration:\t\t {}'.format(avg_duration))
+    print('Avg Duration:\t\t{}'.format(avg_duration))
 
 
     return avg_reward, max_reward, avg_duration
