@@ -1,6 +1,6 @@
 from breaking_atari.BaseParser import BaseParser
 from breaking_atari.train import train
-from breaking_atari.models.mlp import MLP
+from breaking_atari.models.MLP import MLP
 from breaking_atari.atari_wrappers.openai_wrappers import wrap_deepmind
 
 import os
@@ -27,8 +27,8 @@ if __name__ == '__main__':
     action_dims = env.action_space.n
     input_dims = config.grid_size[0] * config.grid_size[1] * config.n_object_types
 
-    model = MLP(input_dims, action_dims, config.sprites_dir, device=config.device)
-    target = MLP(input_dims, action_dims, config.sprites_dir, device=config.device)
+    model = MLP(input_dims, 300, action_dims, config.sprites_dir, device=config.device)
+    target = MLP(input_dims, 300, action_dims, config.sprites_dir, device=config.device)
     target.load_state_dict(model.state_dict())
     target.eval()
 
