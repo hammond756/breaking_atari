@@ -116,16 +116,14 @@ def train(model, target, env, config):
             if frames % config.eval_every == 0:
                 model.eval()
                 with torch.no_grad():
-                    avg_reward, max_reward = evaluate_reward(model, env, config)
+                    avg_reward, max_reward, avg_duration = evaluate_reward(model, env, config)
                     avg_q = evaluate_q_func(model, val_states)
-
-                print('Average reward: \t\t{}'.format(avg_reward))
-                print('Average q-val: \t\t{}'.format(avg_q))
 
                 # update statistics
                 stats['epoch'].append(len(stats['epoch']))
                 stats['avg_reward'].append(avg_reward)
                 stats['max_reward'].append(max_reward)
+                stats['avg_duration'].append(avg_duration)
                 stats['avg_q'].append(avg_q)
                 stats['episodes'].append(episodes)
 
@@ -149,17 +147,23 @@ def evaluate_q_func(model, val_states):
     predictions = model(val_states)
     max_q, argmax_q = torch.max(predictions, dim=1)
 
-    return max_q.mean().item()
+    avg_q = max_q.mean().item()
+
+    print("Avg Q(s,a): \t\t{}".format(avg_q))
+
+    return avg_q
 
 def evaluate_reward(model, env, config):
     action_dims = env.action_space.n
 
     rewards = []
+    durations = []
     frames = 0
 
     while True:
         obs = env.reset()
         episode_reward = 0
+        episode_duration = 0
 
         while True:
             # Select and perform an action
@@ -171,9 +175,11 @@ def evaluate_reward(model, env, config):
             # Move to the next state
             obs = next_obs
             frames += 1
+            episode_duration += 1
 
             if done:
                 rewards.append(episode_reward)
+                durations.append(episode_duration)
                 break
 
         if frames > config.num_eval:
@@ -181,5 +187,12 @@ def evaluate_reward(model, env, config):
 
     avg_reward = sum(rewards) / len(rewards)
     max_reward = max(rewards)
+    avg_duration = sum(durations) / len(durations)
 
-    return avg_reward, max_reward
+    print('Evaluated on {} episodes'.format(len(rewards)))
+    print('Avg reward: \t\t{}'.format(avg_reward))
+    print('Max reward: \t\t{}'.format(avg_reward))
+    print('Avg Duration:\t\t {}'.format(avg_duration))
+
+
+    return avg_reward, max_reward, avg_duration
