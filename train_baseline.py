@@ -28,6 +28,7 @@ if __name__ == '__main__':
     parser.add_argument('--output_dir', type=str, required=True)
     parser.add_argument('--optimize_every', type=int, required=False, default=4)
     parser.add_argument('--device', type=str, required=True)
+    parser.add_argumetn('--n_validation', type=int, required=False, default=512)
 
     # model specific parameters
     parser.add_argument('--image_size', type=int, nargs=2, required=False, default=[110, 84])

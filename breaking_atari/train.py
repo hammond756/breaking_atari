@@ -73,7 +73,7 @@ def train(model, target, env, config):
 
     with torch.no_grad():
         model.eval()
-        val_states = generate_validation_states(env, model, 512)
+        val_states = generate_validation_states(env, model, config.n_validation_states)
 
     while True:
         # Initialize the environment
