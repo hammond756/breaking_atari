@@ -73,15 +73,16 @@ def train(model, target, env, config):
 
     with torch.no_grad():
         model.eval()
-        val_states = env.reset() # track expected value of initial state as proxy for learning
-        # val_states = generate_validation_states(env, model, config.n_validation_states)
+        val_states = [env.reset()] # track expected value of initial state as proxy for learning
+        # val_states = generate_validation_states(env, config.n_validation_states)
 
     while True:
         # Initialize the environment
         obs = env.reset()
         total_reward = 0
+        done = False
 
-        while True:
+        while not done:
 
             if frames % 100 == 0:
                 print("{} / {} frames done".format(frames, config.num_frames))
@@ -114,6 +115,10 @@ def train(model, target, env, config):
             if frames % config.target_update == 0:
                 target.load_state_dict(model.state_dict())
 
+            if done:
+                rewards.append(total_reward)
+                episodes += 1
+
             if frames % config.eval_every == 0:
                 model.eval()
                 with torch.no_grad():
@@ -136,16 +141,11 @@ def train(model, target, env, config):
                 statistics = pd.DataFrame(stats)
                 statistics.to_csv(os.path.join(config.output_dir, 'stats.csv'), index_label='idx')
 
-            if done:
-                rewards.append(total_reward)
-                episodes += 1
-                break
-
         if frames > config.num_frames:
             break
 
 def evaluate_q_func(model, val_states):
-    val_states = model.prepare_input(val_states)
+    val_states = model.prepare_input(val_states, batch=True)
     predictions = model(val_states)
     max_q, argmax_q = torch.max(predictions, dim=1)
 

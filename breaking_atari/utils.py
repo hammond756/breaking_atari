@@ -25,7 +25,7 @@ def get_epsilon(it, start, stop, steps):
 
     return epsilons[it]
 
-def generate_validation_states(env, model, k):
+def generate_validation_states(env, k):
     obs = env.reset()
 
     candidate_states = [obs]
