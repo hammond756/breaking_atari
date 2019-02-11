@@ -100,7 +100,7 @@ def train(model, target, env, config):
             frames += 1
             total_reward += reward
 
-            replay_buffer.add(obs, action.cpu().numpy(), reward.cpu().numpy(), next_obs, done)
+            replay_buffer.add(obs, action.cpu().numpy(), reward, next_obs, done)
 
             # Move to the next state
             obs = next_obs
