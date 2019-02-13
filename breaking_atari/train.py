@@ -1,6 +1,7 @@
 import torch
 import torch.nn.functional as F
 
+import time
 import os
 from collections import defaultdict
 import pprint
@@ -71,6 +72,8 @@ def train(model, target, env, config):
     rewards = []
     stats = defaultdict(list)
 
+    last_fram_at = time.time()
+
     with torch.no_grad():
         model.eval()
         val_states = [env.reset()] # track expected value of initial state as proxy for learning
@@ -85,7 +88,11 @@ def train(model, target, env, config):
         while not done:
 
             if frames % 100 == 0:
-                print("{} / {} frames done".format(frames, config.num_frames))
+                current_time = time.time()
+                hundred_frames_in = current_time - last_fram_at
+                last_fram_at = current_time
+
+                print("{} / {} frames done \t\t\t at {} f/s".format(frames, config.num_frames, 100/hundred_frames_in))
 
             # get epsilon based on number of frames
             epsilon = get_epsilon(frames, config.eps_start, config.eps_stop, config.eps_steps)
