@@ -1,5 +1,6 @@
 import torch
 import torch.nn.functional as F
+import torch.multiprocessing as mp
 
 import time
 import os
@@ -54,30 +55,15 @@ def optimize_model(model, target, memory, optimizer, config):
         param.grad.data.clamp_(-1, 1)
     optimizer.step()
 
-def train(model, target, env, config):
-    action_dims = env.action_space.n
 
-    print('------')
-    print('Starting {}'.format(config.environment), 'on', model.device)
-    pprint.pprint(config)
-    print('------')
-
-    print('MODEL', model)
-
-    optimizer = torch.optim.Adam(model.parameters(),lr=config.lr)
-    replay_buffer = ReplayBuffer(config.memory)
+def gather_experience(model, env, queue, config):
 
     frames = 0
-    episodes = 0
+    action_dims = env.action_space.n
+
     rewards = []
-    stats = defaultdict(list)
-
+    episodes = 0
     last_fram_at = time.time()
-
-    with torch.no_grad():
-        model.eval()
-        val_states = [env.reset()] # track expected value of initial state as proxy for learning
-        # val_states = generate_validation_states(env, config.n_validation_states)
 
     while True:
         # Initialize the environment
@@ -91,65 +77,100 @@ def train(model, target, env, config):
                 current_time = time.time()
                 hundred_frames_in = current_time - last_fram_at
                 last_fram_at = current_time
-
                 print("{} / {} frames done \t\t\t at {} f/s".format(frames, config.num_frames, 100/hundred_frames_in))
 
             # get epsilon based on number of frames
             epsilon = get_epsilon(frames, config.eps_start, config.eps_stop, config.eps_steps)
 
-            # first acquire enough experience for samples to be decorrelated
             if frames > config.exploration_phase:
                 action = select_action(model, obs, action_dims, epsilon)
             else:
                 action = random_action(action_dims, model.device)
 
+
+            # place collected experience in the queue for the main process to consume
             next_obs, reward, done, _ = env.step(action.item())
-
-            frames += 1
-            total_reward += reward
-
-            replay_buffer.add(obs, action.cpu().numpy(), reward, next_obs, done)
+            queue.put((obs, action.cpu().numpy(), reward, next_obs, done))
 
             # Move to the next state
             obs = next_obs
 
-            if frames % config.optimize_every == 0 and len(replay_buffer) > config.exploration_phase:
-                # Perform one step of the optimization (on the target network)
-                model.train()
-                optimize_model(model, target, replay_buffer, optimizer, config)
-
-            # Update the target network, copying all weights and biases in DQN
-            if frames % config.target_update == 0:
-                target.load_state_dict(model.state_dict())
+            frames += 1
+            total_reward += reward
 
             if done:
                 rewards.append(total_reward)
                 episodes += 1
 
-            if frames % config.eval_every == 0:
-                model.eval()
-                with torch.no_grad():
-                    avg_reward, max_reward, avg_duration = evaluate_reward(model, env, config)
-                    avg_q = evaluate_q_func(model, val_states)
-
-                # update statistics
-                stats['epoch'].append(len(stats['epoch']))
-                stats['avg_reward'].append(avg_reward)
-                stats['max_reward'].append(max_reward)
-                stats['avg_duration'].append(avg_duration)
-                stats['avg_q'].append(avg_q)
-                stats['episodes'].append(episodes)
-
-                # save model
-                model_path = config.output_dir + '/dqn-{}'.format(len(stats['epoch']))
-                torch.save(model.state_dict(), model_path)
-
-                # save statistics
-                statistics = pd.DataFrame(stats)
-                statistics.to_csv(os.path.join(config.output_dir, 'stats.csv'), index_label='idx')
-
         if frames > config.num_frames:
             break
+
+
+
+def train(model, target, env, config):
+
+    print('------')
+    print('Starting {}'.format(config.environment), 'on', model.device)
+    pprint.pprint(config)
+    print('------')
+
+    print('MODEL', model)
+
+    optimizer = torch.optim.Adam(model.parameters(),lr=config.lr)
+    replay_buffer = ReplayBuffer(config.memory)
+
+    frames = 0
+    queue = mp.Queue(maxsize=config.optimize_every * 2) # maxsize to keep processes somewhat in sync??
+    play_process = mp.Process(target=gather_experience, args=(model, env, queue, config))
+    play_process.start()
+
+    with torch.no_grad():
+        model.eval()
+        val_states = [env.reset()] # track expected value of initial state as proxy for learning
+        # val_states = generate_validation_states(env, config.n_validation_states)
+
+    while play_process.is_alive():
+        for _ in range(config.optimize_every):
+            frames += 1
+            experience = queue.get()
+            if experience is None:
+                play_process.join() # wait for experience to accumulate
+                break
+            obs, action, reward, next_obs, done = experience
+            replay_buffer.add(obs, action, reward, next_obs, done)
+
+        # first acquire enough experience for samples to be decorrelated
+        if frames % config.optimize_every == 0 and len(replay_buffer) > config.exploration_phase:
+            # Perform one step of the optimization (on the target network)
+            model.train()
+            optimize_model(model, target, replay_buffer, optimizer, config)
+
+        # Update the target network, copying all weights and biases in DQN
+        if frames % config.target_update == 0:
+            target.load_state_dict(model.state_dict())
+
+        if frames % config.eval_every == 0:
+            model.eval()
+            with torch.no_grad():
+                avg_reward, max_reward, avg_duration = evaluate_reward(model, env, config)
+                avg_q = evaluate_q_func(model, val_states)
+
+            # update statistics
+            # stats['epoch'].append(len(stats['epoch']))
+            # stats['avg_reward'].append(avg_reward)
+            # stats['max_reward'].append(max_reward)
+            # stats['avg_duration'].append(avg_duration)
+            # stats['avg_q'].append(avg_q)
+            # stats['episodes'].append(episodes)
+
+            # save model
+            # model_path = config.output_dir + '/dqn-{}'.format(len(stats['epoch']))
+            # torch.save(model.state_dict(), model_path)
+
+            # save statistics
+            # statistics = pd.DataFrame(stats)
+            # statistics.to_csv(os.path.join(config.output_dir, 'stats.csv'), index_label='idx')
+
 
 def evaluate_q_func(model, val_states):
     val_states = model.prepare_input(val_states, batch=True)
