@@ -63,7 +63,7 @@ def gather_experience(model, env, queue, config):
 
     rewards = []
     episodes = 0
-    last_fram_at = time.time()
+    last_frame_at = time.time()
 
     while True:
         # Initialize the environment
@@ -75,8 +75,8 @@ def gather_experience(model, env, queue, config):
 
             if frames % 100 == 0:
                 current_time = time.time()
-                hundred_frames_in = current_time - last_fram_at
-                last_fram_at = current_time
+                hundred_frames_in = current_time - last_frame_at
+                last_frame_at = current_time
                 print("{} / {} frames done \t\t\t at {} f/s".format(frames, config.num_frames, 100/hundred_frames_in))
 
             # get epsilon based on number of frames
@@ -105,6 +105,9 @@ def gather_experience(model, env, queue, config):
         if frames > config.num_frames:
             break
 
+    queue.close()
+    print("-- Done playing --")
+
 
 
 def train(model, target, env, config):
@@ -120,8 +123,8 @@ def train(model, target, env, config):
     replay_buffer = ReplayBuffer(config.memory)
 
     frames = 0
-    queue = mp.Queue(maxsize=config.optimize_every * 2) # maxsize to keep processes somewhat in sync??
-    play_process = mp.Process(target=gather_experience, args=(model, env, queue, config))
+    queue = mp.Queue(maxsize=config.optimize_every) # maxsize to keep processes somewhat in sync??
+    play_process = mp.Process(target=gather_experience, args=(model, env, queue, config), name='Play')
     play_process.start()
 
     with torch.no_grad():
@@ -140,7 +143,7 @@ def train(model, target, env, config):
             replay_buffer.add(obs, action, reward, next_obs, done)
 
         # first acquire enough experience for samples to be decorrelated
-        if frames % config.optimize_every == 0 and len(replay_buffer) > config.exploration_phase:
+        if len(replay_buffer) > config.exploration_phase:
             # Perform one step of the optimization (on the target network)
             model.train()
             optimize_model(model, target, replay_buffer, optimizer, config)
