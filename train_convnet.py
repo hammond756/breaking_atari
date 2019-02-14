@@ -22,6 +22,12 @@ if __name__ == '__main__':
     # initialize environment
     env = gym.make(config.environment)
     if config.environment == 'CartPole-v0':
+
+        from pyvirtualdisplay import Display
+        display = Display()
+        display.start()
+        os.environ['DISPLAY'] = ':' + str(display.display) + '.' + str(display.screen)
+
         env = CartPoleVisual(env, height=config.image_size[0], width=config.image_size[1])
         env = FrameStack(env, config.frame_stack)
     else:
