@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 import torch.multiprocessing as mp
 
-mp.set_start_method('forkserver') # only method that works with CUDA
+mp = mp.get_context('spawn') # only method that works with CUDA
 
 import time
 import os
