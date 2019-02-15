@@ -2,6 +2,8 @@ import torch
 import torch.nn.functional as F
 import torch.multiprocessing as mp
 
+mp.set_start_method('spawn') # only method that works with CUDA
+
 import time
 import os
 from collections import defaultdict
