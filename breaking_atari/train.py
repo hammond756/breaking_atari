@@ -123,7 +123,7 @@ def train(model, target, env, config):
     replay_buffer = ReplayBuffer(config.memory)
 
     frames = 0
-    queue = mp.Queue(maxsize=config.optimize_every) # maxsize to keep processes somewhat in sync??
+    queue = mp.Queue(maxsize=config.optimize_every * 2) # maxsize to keep processes somewhat in sync??
     play_process = mp.Process(target=gather_experience, args=(model, env, queue, config), name='Play')
     play_process.start()
 
