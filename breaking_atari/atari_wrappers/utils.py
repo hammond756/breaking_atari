@@ -94,6 +94,26 @@ def location_features(template, observation, grid, threshold):
 
     return flat
 
+def compute_bunker_health(template, image):
+    health = []
+    bunker_y, bunker_x = np.array([156, 156, 156]), np.array([ 42,  74, 106])
+
+    y_offset = bunker_y + template.shape[0]
+    x_offset = bunker_x + template.shape[1]
+
+    for i in range(3):
+        bunker_cutout = image[bunker_y[i]:y_offset[i], bunker_x[i]:x_offset[i]]
+        health.append(matchTemplate(bunker_cutout, template, TM_CCORR_NORMED)[0,0])
+
+    return np.array(health)
+
+def compute_agent_x_position(template, image):
+    agent_y = 185
+    agent_cutout = image[agent_y:agent_y+10, :]
+    correlations = matchTemplate(agent_cutout, template, TM_CCORR_NORMED)
+    y, x = np.where(correlations > 0.98)
+    return x
+
 def extract_features(observation, templates, grid, threshold):
 
     locs = []

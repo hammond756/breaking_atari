@@ -13,6 +13,6 @@ fi
 
 mkdir $TMPDIR$1
 
-python -u $3 --num_frames 50000 --environment CartPole-v0 --output_dir $TMPDIR/$1 --eps_start 1.0 --eps_stop 0.05 --eps_steps 10000 --target_update 500 --memory 1000 --gamma 0.99 --lr 0.0005 --batch_size 128 --optimize_every 4 --exploration_phase 100 --device $2 --eval_every 1000 --num_eval 1
+python -u $3 --num_frames 50000 --environment CartPole-v0 --output_dir $TMPDIR/$1 --eps_start 1.0 --eps_stop 0.05 --eps_steps 10000 --target_update 500 --memory 1000 --gamma 0.99 --lr 0.0005 --batch_size 32 --optimize_every 2 --exploration_phase 100 --device $2 --eval_every 1000 --num_eval 1
 
 cp -r $TMPDIR$1 "$PWD/$1"
